@@ -1,0 +1,771 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Go Board</title>
+  <style>
+    :root {
+      --bg: radial-gradient(circle at 20% 20%, #f6e4b2, #d8aa5c 70%, #c8944b);
+      --accent: #1f4b99;
+      --panel: #f8f5ed;
+      --text: #1d140a;
+      --muted: #6b5c4d;
+      --black-stone: #1a1a1a;
+      --white-stone: #f7f7f7;
+      --shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "IBM Plex Sans", "Segoe UI", "Gill Sans", sans-serif;
+      background: linear-gradient(135deg, #0f1115, #1b202a 40%, #12151c);
+      color: var(--text);
+      display: flex;
+      align-items: stretch;
+      justify-content: stretch;
+      padding: 0;
+    }
+
+    .card {
+      width: 100%;
+      min-height: 100vh;
+      background: var(--panel);
+      border-radius: 0;
+      box-shadow: none;
+      overflow: hidden;
+      border: none;
+    }
+
+    header {
+      padding: 16px 20px 12px;
+      background: linear-gradient(120deg, #12294f, #1d4b88);
+      color: #f3f6ff;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    header h1 {
+      margin: 0;
+      font-size: 22px;
+      letter-spacing: 0.02em;
+      font-weight: 700;
+    }
+
+    header .sub {
+      font-size: 14px;
+      opacity: 0.85;
+    }
+
+    .body {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 320px;
+      gap: 14px;
+      padding: 14px;
+      align-items: start;
+    }
+
+    .board-wrap {
+      position: relative;
+      background: var(--bg);
+      border-radius: 14px;
+      padding: 16px;
+      box-shadow: inset 0 4px 12px rgba(0, 0, 0, 0.12);
+    }
+
+    canvas {
+      width: 100%;
+      height: auto;
+      display: block;
+      background: transparent;
+    }
+
+    .side {
+      background: white;
+      border-radius: 12px;
+      padding: 16px;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6), 0 4px 18px rgba(0, 0, 0, 0.08);
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      max-height: calc(100vh - 140px);
+      overflow-y: auto;
+    }
+
+    .row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    label {
+      font-weight: 600;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    select, button {
+      border: 1px solid #d1c7b3;
+      background: #fffdf9;
+      color: #1d140a;
+      padding: 8px 12px;
+      border-radius: 10px;
+      font-size: 14px;
+      cursor: pointer;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+      transition: transform 80ms ease, box-shadow 80ms ease;
+    }
+
+    button.primary {
+      background: linear-gradient(120deg, #1f4b99, #17699b);
+      color: #f4f8ff;
+      border: none;
+    }
+
+    button:hover, select:hover {
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+      transform: translateY(-1px);
+    }
+
+    .status {
+      padding: 10px 12px;
+      background: #f5efe2;
+      border: 1px solid #e3d7c0;
+      border-radius: 10px;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    .legend {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 13px;
+      color: var(--muted);
+      flex-wrap: wrap;
+    }
+
+    .dot {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      display: inline-block;
+      border: 1px solid rgba(0,0,0,0.1);
+    }
+
+    .log {
+      max-height: 160px;
+      overflow-y: auto;
+      padding: 8px 10px;
+      background: #faf7f0;
+      border: 1px solid #e5dac6;
+      border-radius: 10px;
+      font-size: 13px;
+    }
+
+    .log-entry {
+      margin: 2px 0;
+    }
+
+    .hint {
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    @media (max-width: 900px) {
+      .body {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <header>
+      <div>
+        <h1>Go Board</h1>
+        <div class="sub">Click to place stones. Standard rules with simple ko.</div>
+      </div>
+      <div class="legend">
+        <span class="dot" style="background: var(--black-stone);"></span> Black
+        <span class="dot" style="background: var(--white-stone);"></span> White
+      </div>
+    </header>
+    <div class="body">
+      <div class="board-wrap">
+        <canvas id="board" width="800" height="800"></canvas>
+      </div>
+      <div class="side">
+        <div class="row">
+          <label for="size">Board size</label>
+          <select id="size">
+            <option value="9">9x9</option>
+            <option value="13">13x13</option>
+            <option value="19" selected>19x19</option>
+          </select>
+          <button id="restart" class="primary">New game</button>
+        </div>
+        <div class="row">
+          <button id="pass">Pass</button>
+          <button id="undo">Undo</button>
+          <span style="font-size:13px; color:var(--muted);">Two passes end the game.</span>
+        </div>
+        <div class="row">
+          <button id="copy-sgf">Copy SGF</button>
+          <span class="hint">Hover to preview, territory estimated after two passes.</span>
+        </div>
+        <div class="status" id="status">Black to play.</div>
+        <div class="log" id="log"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const boardCanvas = document.getElementById("board");
+    const ctx = boardCanvas.getContext("2d");
+    const boardWrap = document.querySelector(".board-wrap");
+    const headerEl = document.querySelector("header");
+    const sizeSelect = document.getElementById("size");
+    const statusEl = document.getElementById("status");
+    const logEl = document.getElementById("log");
+    const restartBtn = document.getElementById("restart");
+    const passBtn = document.getElementById("pass");
+    const undoBtn = document.getElementById("undo");
+    const copySgfBtn = document.getElementById("copy-sgf");
+
+    const Black = 1;
+    const White = 2;
+
+    let state = createGame(parseInt(sizeSelect.value, 10));
+    let hovered = null;
+
+    boardCanvas.addEventListener("click", (e) => {
+      const pos = getBoardPos(e);
+      if (!pos) return;
+      const { row, col } = pos;
+      const result = playMove(state, row, col);
+      if (!result.ok) {
+        statusEl.textContent = result.error;
+        return;
+      }
+      pushLog(result.message);
+      updateUI();
+    });
+
+    boardCanvas.addEventListener("mousemove", (e) => {
+      const pos = getBoardPos(e);
+      if (!pos) {
+        hovered = null;
+        drawBoard();
+        return;
+      }
+      hovered = pos;
+      drawBoard();
+    });
+
+    boardCanvas.addEventListener("mouseleave", () => {
+      hovered = null;
+      drawBoard();
+    });
+
+    passBtn.addEventListener("click", () => {
+      const result = pass(state);
+      pushLog(result.message);
+      updateUI();
+    });
+
+    undoBtn.addEventListener("click", () => {
+      if (state.historyStack.length === 0) {
+        statusEl.textContent = "Nothing to undo.";
+        return;
+      }
+      restorePrevious(state);
+      pushLog("Undid last move.");
+      updateUI();
+    });
+
+    restartBtn.addEventListener("click", () => {
+      state = createGame(parseInt(sizeSelect.value, 10));
+      logEl.textContent = "";
+      pushLog(`Started new game ${state.size}x${state.size}.`);
+      resizeCanvas();
+      updateUI();
+    });
+
+    sizeSelect.addEventListener("change", () => {
+      state = createGame(parseInt(sizeSelect.value, 10));
+      logEl.textContent = "";
+      pushLog(`Started new game ${state.size}x${state.size}.`);
+      resizeCanvas();
+      updateUI();
+    });
+
+    copySgfBtn.addEventListener("click", () => {
+      const sgf = toSGF(state);
+      navigator.clipboard?.writeText(sgf).then(
+        () => (statusEl.textContent = "SGF copied."),
+        () => (statusEl.textContent = "Unable to copy SGF automatically.")
+      );
+      pushLog("SGF exported.");
+    });
+
+    function createGame(size) {
+      const grid = new Array(size * size).fill(0);
+      const g = {
+        size,
+        grid,
+        toPlay: Black,
+        captures: { [Black]: 0, [White]: 0 },
+        moveNumber: 0,
+        consecutivePasses: 0,
+        history: new Set(),
+        historyStack: [],
+        moves: [],
+        lastMove: null,
+      };
+      g.history.add(hashPosition(g));
+      return g;
+    }
+
+    function other(color) {
+      return color === Black ? White : Black;
+    }
+
+    function index(size, row, col) {
+      return row * size + col;
+    }
+
+    function neighbors(size, row, col) {
+      return [
+        [row - 1, col],
+        [row + 1, col],
+        [row, col - 1],
+        [row, col + 1],
+      ].filter(([r, c]) => r >= 0 && r < size && c >= 0 && c < size);
+    }
+
+    function collectGroup(grid, size, row, col) {
+      const color = grid[index(size, row, col)];
+      if (!color) return { group: [], liberties: new Set() };
+      const group = [];
+      const liberties = new Set();
+      const seen = new Set();
+      const stack = [[row, col]];
+      while (stack.length) {
+        const [r, c] = stack.pop();
+        const key = `${r},${c}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        group.push([r, c]);
+        for (const [nr, nc] of neighbors(size, r, c)) {
+          const val = grid[index(size, nr, nc)];
+          if (val === 0) {
+            liberties.add(`${nr},${nc}`);
+          } else if (val === color) {
+            stack.push([nr, nc]);
+          }
+        }
+      }
+      return { group, liberties };
+    }
+
+    function hashPosition(g, gridOverride) {
+      const grid = gridOverride || g.grid;
+      return `${g.toPlay}|${grid.join(",")}`;
+    }
+
+    function cloneGrid(grid) {
+      return grid.slice();
+    }
+
+    function playMove(g, row, col) {
+      if (row < 0 || row >= g.size || col < 0 || col >= g.size) {
+        return { ok: false, error: "Out of bounds." };
+      }
+      const idx = index(g.size, row, col);
+      if (g.grid[idx] !== 0) {
+        return { ok: false, error: "Intersection occupied." };
+      }
+
+      const working = cloneGrid(g.grid);
+      working[idx] = g.toPlay;
+      let captured = 0;
+      const opp = other(g.toPlay);
+
+      for (const [nr, nc] of neighbors(g.size, row, col)) {
+        if (working[index(g.size, nr, nc)] !== opp) continue;
+        const { group, liberties } = collectGroup(working, g.size, nr, nc);
+        if (liberties.size === 0) {
+          for (const [gr, gc] of group) {
+            working[index(g.size, gr, gc)] = 0;
+          }
+          captured += group.length;
+        }
+      }
+
+      const selfGroup = collectGroup(working, g.size, row, col);
+      if (selfGroup.liberties.size === 0) {
+        return { ok: false, error: "Suicide is not allowed." };
+      }
+
+      const nextToPlay = other(g.toPlay);
+      const newHash = `${nextToPlay}|${working.join(",")}`;
+      if (g.history.has(newHash)) {
+        return { ok: false, error: "Ko: position already occurred." };
+      }
+
+      g.historyStack.push({
+        grid: g.grid,
+        toPlay: g.toPlay,
+        captures: { ...g.captures },
+        moveNumber: g.moveNumber,
+        consecutivePasses: g.consecutivePasses,
+        moves: g.moves.slice(),
+        lastMove: g.lastMove,
+        hash: hashPosition(g),
+      });
+
+      g.grid = working;
+      g.toPlay = nextToPlay;
+      g.captures[g.toPlay] ??= 0;
+      g.captures[other(g.toPlay)] ??= 0;
+      g.captures[other(g.toPlay)] += captured;
+      g.moveNumber += 1;
+      g.consecutivePasses = 0;
+      g.history.add(newHash);
+      g.lastMove = { row, col, color: other(g.toPlay) };
+      g.moves = g.moves.concat([{ row, col, color: other(g.toPlay) }]);
+
+      const coordLabel = formatCoord(row, col, g.size);
+      const message = captured
+        ? `${colorName(other(g.toPlay))} played ${coordLabel}, captured ${captured}.`
+        : `${colorName(other(g.toPlay))} played ${coordLabel}.`;
+      return { ok: true, message };
+    }
+
+    function pass(g) {
+      g.historyStack.push({
+        grid: g.grid,
+        toPlay: g.toPlay,
+        captures: { ...g.captures },
+        moveNumber: g.moveNumber,
+        consecutivePasses: g.consecutivePasses,
+        moves: g.moves.slice(),
+        lastMove: g.lastMove,
+        hash: hashPosition(g),
+      });
+      g.toPlay = other(g.toPlay);
+      g.moveNumber += 1;
+      g.consecutivePasses += 1;
+      g.history.add(hashPosition(g));
+      g.moves = g.moves.concat([{ pass: true, color: other(g.toPlay) }]);
+      g.lastMove = null;
+      const over = g.consecutivePasses >= 2;
+      return {
+        message: over
+          ? `${colorName(other(g.toPlay))} passed. Both players passed — game ends.`
+          : `${colorName(other(g.toPlay))} passed.`,
+      };
+    }
+
+    function restorePrevious(g) {
+      const prev = g.historyStack.pop();
+      if (!prev) return;
+      g.grid = prev.grid;
+      g.toPlay = prev.toPlay;
+      g.captures = prev.captures;
+      g.moveNumber = prev.moveNumber;
+      g.consecutivePasses = prev.consecutivePasses;
+      g.moves = prev.moves;
+      g.lastMove = prev.lastMove;
+    }
+
+    function colorName(c) {
+      return c === Black ? "Black" : "White";
+    }
+
+    function formatCoord(row, col, size) {
+      const labels = columnLabels(size);
+      return `${labels[col]}${size - row}`;
+    }
+
+    function columnLabels(size) {
+      const labels = [];
+      for (let ch = 0; labels.length < size; ch++) {
+        const letter = String.fromCharCode("A".charCodeAt(0) + ch);
+        if (letter === "I") continue;
+        labels.push(letter);
+      }
+      return labels;
+    }
+
+    function getBoardPos(event) {
+      const rect = boardCanvas.getBoundingClientRect();
+      const scaleX = boardCanvas.width / rect.width;
+      const scaleY = boardCanvas.height / rect.height;
+      const x = (event.clientX - rect.left) * scaleX;
+      const y = (event.clientY - rect.top) * scaleY;
+      const { margin, cell } = layoutMetrics(state.size);
+      const col = Math.round((x - margin) / cell);
+      const row = Math.round((y - margin) / cell);
+      if (col < 0 || col >= state.size || row < 0 || row >= state.size) return null;
+      return { row, col };
+    }
+
+    function layoutMetrics(size) {
+      const padding = 64;
+      const w = boardCanvas.width - padding * 2;
+      const cell = w / (size - 1);
+      const margin = padding;
+      return { cell, margin };
+    }
+
+    function resizeCanvas() {
+      const availableHeight = window.innerHeight - headerEl.offsetHeight - 40;
+      const availableWidth = boardWrap.clientWidth - 8;
+      const logicalSize = Math.max(380, Math.min(availableWidth, availableHeight));
+      const scale = window.devicePixelRatio || 1;
+      const pixelSize = Math.floor(logicalSize * scale);
+      boardCanvas.width = pixelSize;
+      boardCanvas.height = pixelSize;
+      boardCanvas.style.width = `${logicalSize}px`;
+      boardCanvas.style.height = `${logicalSize}px`;
+    }
+
+    function drawBoard() {
+      const { size, grid } = state;
+      const { cell, margin } = layoutMetrics(size);
+      ctx.clearRect(0, 0, boardCanvas.width, boardCanvas.height);
+
+      // Wood grain overlay
+      const gradient = ctx.createLinearGradient(0, 0, boardCanvas.width, boardCanvas.height);
+      gradient.addColorStop(0, "rgba(255,255,255,0.25)");
+      gradient.addColorStop(1, "rgba(0,0,0,0.05)");
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, boardCanvas.width, boardCanvas.height);
+
+      ctx.strokeStyle = "#2a1a0c";
+      ctx.lineWidth = 1.2;
+      ctx.lineCap = "round";
+
+      for (let i = 0; i < size; i++) {
+        const offset = margin + i * cell;
+        ctx.beginPath();
+        ctx.moveTo(margin, offset);
+        ctx.lineTo(margin + cell * (size - 1), offset);
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.moveTo(offset, margin);
+        ctx.lineTo(offset, margin + cell * (size - 1));
+        ctx.stroke();
+      }
+
+      drawStarPoints(size, cell, margin);
+
+      for (let r = 0; r < size; r++) {
+        for (let c = 0; c < size; c++) {
+          const val = grid[index(size, r, c)];
+          if (val === 0) continue;
+          drawStone(r, c, val === Black ? "black" : "white", cell, margin);
+        }
+      }
+
+      if (hovered) {
+        const idx = index(size, hovered.row, hovered.col);
+        if (grid[idx] === 0) {
+          drawGhost(hovered.row, hovered.col, state.toPlay === Black ? "black" : "white", cell, margin);
+        }
+      }
+
+      if (state.lastMove && !hovered) {
+        drawLastMove(state.lastMove.row, state.lastMove.col, cell, margin);
+      }
+
+      drawLabels(size, cell, margin);
+    }
+
+    function drawStarPoints(size, cell, margin) {
+      const starMap = {
+        9: [2, 4, 6],
+        13: [3, 6, 9],
+        19: [3, 9, 15],
+      };
+      const coords = starMap[size];
+      if (!coords) return;
+      ctx.fillStyle = "#23160b";
+      for (const r of coords) {
+        for (const c of coords) {
+          const x = margin + c * cell;
+          const y = margin + r * cell;
+          ctx.beginPath();
+          ctx.arc(x, y, cell * 0.08, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+    }
+
+    function drawStone(row, col, color, cell, margin) {
+      const x = margin + col * cell;
+      const y = margin + row * cell;
+      const radius = cell * 0.42;
+      const gradient = ctx.createRadialGradient(
+        x - radius * 0.4,
+        y - radius * 0.4,
+        radius * 0.2,
+        x,
+        y,
+        radius
+      );
+      if (color === "black") {
+        gradient.addColorStop(0, "#3a3a3a");
+        gradient.addColorStop(1, "#0d0d0d");
+      } else {
+        gradient.addColorStop(0, "#ffffff");
+        gradient.addColorStop(1, "#d9d9d9");
+      }
+      ctx.fillStyle = gradient;
+      ctx.strokeStyle = "rgba(0,0,0,0.25)";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.arc(x, y, radius, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+    }
+
+    function drawGhost(row, col, color, cell, margin) {
+      const x = margin + col * cell;
+      const y = margin + row * cell;
+      const radius = cell * 0.42;
+      ctx.fillStyle = color === "black" ? "rgba(0,0,0,0.25)" : "rgba(255,255,255,0.7)";
+      ctx.beginPath();
+      ctx.arc(x, y, radius, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    function drawLastMove(row, col, cell, margin) {
+      const x = margin + col * cell;
+      const y = margin + row * cell;
+      const radius = cell * 0.15;
+      ctx.strokeStyle = "#f1c40f";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(x, y, radius, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+
+    function drawLabels(size, cell, margin) {
+      ctx.fillStyle = "#1c120a";
+      ctx.font = "13px 'IBM Plex Sans', 'Segoe UI', sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      const labels = columnLabels(size);
+      const offset = cell * 0.35;
+      for (let i = 0; i < size; i++) {
+        const x = margin + i * cell;
+        const yTop = margin - offset;
+        const yBottom = margin + cell * (size - 1) + offset;
+        ctx.fillText(labels[i], x, yTop);
+        ctx.fillText(labels[i], x, yBottom);
+      }
+      for (let i = 0; i < size; i++) {
+        const label = `${size - i}`;
+        const y = margin + i * cell;
+        const xLeft = margin - offset * 1.5;
+        const xRight = margin + cell * (size - 1) + offset * 1.5;
+        ctx.fillText(label, xLeft, y);
+        ctx.fillText(label, xRight, y);
+      }
+    }
+
+    function updateUI() {
+      drawBoard();
+      const over = state.consecutivePasses >= 2;
+      if (over) {
+        const territory = scoreTerritory(state);
+        statusEl.textContent = `Game over. Territory (rough): Black ${territory.black} vs White ${territory.white}. Captures — Black: ${state.captures[Black] || 0}, White: ${state.captures[White] || 0}.`;
+      } else {
+        statusEl.textContent = `${colorName(state.toPlay)} to play. Captures — Black: ${state.captures[Black] || 0}, White: ${state.captures[White] || 0}.`;
+      }
+    }
+
+    function pushLog(text) {
+      const div = document.createElement("div");
+      div.className = "log-entry";
+      div.textContent = text;
+      logEl.appendChild(div);
+      logEl.scrollTop = logEl.scrollHeight;
+    }
+
+    function scoreTerritory(g) {
+      const seen = new Set();
+      let black = g.captures[Black] || 0;
+      let white = g.captures[White] || 0;
+      for (let r = 0; r < g.size; r++) {
+        for (let c = 0; c < g.size; c++) {
+          const key = `${r},${c}`;
+          if (seen.has(key)) continue;
+          const val = g.grid[index(g.size, r, c)];
+          if (val !== 0) {
+            seen.add(key);
+            continue;
+          }
+          const region = [];
+          const queue = [[r, c]];
+          const borders = new Set();
+          while (queue.length) {
+            const [rr, cc] = queue.pop();
+            const k = `${rr},${cc}`;
+            if (seen.has(k)) continue;
+            seen.add(k);
+            region.push([rr, cc]);
+            for (const [nr, nc] of neighbors(g.size, rr, cc)) {
+              const cellVal = g.grid[index(g.size, nr, nc)];
+              if (cellVal === 0) {
+                queue.push([nr, nc]);
+              } else {
+                borders.add(cellVal);
+              }
+            }
+          }
+          if (borders.size === 1) {
+            const owner = [...borders][0];
+            if (owner === Black) black += region.length;
+            else if (owner === White) white += region.length;
+          }
+        }
+      }
+      return { black, white };
+    }
+
+    function toSGF(g) {
+      const moves = g.moves.map((m) => {
+        if (m.pass) {
+          return `;${m.color === Black ? "B" : "W"}[]`;
+        }
+        const x = String.fromCharCode("a".charCodeAt(0) + m.col);
+        const y = String.fromCharCode("a".charCodeAt(0) + m.row);
+        return `;${m.color === Black ? "B" : "W"}[${x}${y}]`;
+      });
+      const size = g.size;
+      return `(;GM[1]FF[4]SZ[${size}]CA[UTF-8]\n` + moves.join("") + "\n)";
+    }
+
+    window.addEventListener("resize", () => {
+      resizeCanvas();
+      updateUI();
+    });
+
+    // Initial render
+    resizeCanvas();
+    pushLog(`Started new game ${state.size}x${state.size}.`);
+    updateUI();
+  </script>
+</body>
+</html>
